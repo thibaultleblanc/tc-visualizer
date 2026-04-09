@@ -1,0 +1,123 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+:root {
+  --bg: #f6f1e8;
+  --panel: rgba(255, 250, 240, 0.82);
+  --ink: #1d232d;
+  --muted: #5d6672;
+  --accent: #005f73;
+  --accent-2: #d1495b;
+  --line: rgba(29, 35, 45, 0.17);
+  --shadow: 0 18px 40px rgba(0, 95, 115, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(209, 73, 91, 0.18),
+      transparent 32%
+    ),
+    radial-gradient(circle at 80% 5%, rgba(0, 95, 115, 0.25), transparent 40%),
+    linear-gradient(160deg, #f6f1e8 0%, #e7efe8 100%);
+}
+
+.app-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  backdrop-filter: blur(6px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-radius: 20px;
+  padding: 0.8rem 1rem;
+  animation: slideIn 0.5s ease-out;
+}
+
+.brand {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+nav {
+  display: flex;
+  gap: 0.7rem;
+}
+
+nav a {
+  text-decoration: none;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid transparent;
+  transition: 0.25s ease;
+}
+
+nav a.router-link-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0, 95, 115, 0.07);
+}
+
+.content {
+  padding-top: 1rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+
+h1,
+h2,
+h3 {
+  margin-top: 0;
+}
+
+textarea,
+select,
+button {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 800px) {
+  .topbar {
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+}
