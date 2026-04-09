@@ -26,7 +26,7 @@ Apercu disponible sur `http://localhost:4173`.
 
 ## Deploiement GitHub Pages
 
-Le workflow GitHub Actions `.github/workflows/deploy.yml` publie automatiquement sur la branche `gh-pages` via le package `gh-pages` a chaque push sur `main`.
+Le workflow GitHub Actions `.github/workflows/deploy.yml` publie automatiquement sur la branche `gh-pages` via le package `gh-pages` a chaque push sur `master`.
 
 Si tu veux deployer en local:
 
