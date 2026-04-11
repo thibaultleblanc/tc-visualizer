@@ -9,11 +9,16 @@
     </header>
 
     <main class="content">
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <KeepAlive>
+          <component :is="Component" />
+        </KeepAlive>
+      </RouterView>
     </main>
   </div>
 </template>
 
 <script setup>
+import { KeepAlive } from 'vue';
 import { RouterLink, RouterView } from 'vue-router';
 </script>
