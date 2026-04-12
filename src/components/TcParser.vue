@@ -2,7 +2,7 @@
   <section class="parser-grid">
     <div class="panel input-panel">
       <h2>Entrées JSON TC</h2>
-      <p>Mode rapide: copie le one-liner, execute-le sur la machine cible, puis colle le JSON dans la zone unique.</p>
+      <p>Mode rapide: copie le one-liner, exécute-le sur la machine cible, puis colle le JSON dans la zone unique.</p>
 
       <label for="oneliner">One-liner de collecte</label>
       <textarea id="oneliner" :value="captureOneLiner" rows="4" readonly />
@@ -13,12 +13,21 @@
 
       <p v-if="copyMessage" class="copy-msg">{{ copyMessage }}</p>
 
-      <label for="bundle-input">Collage unique (qdisc + classes)</label>
+      <div class="bundle-head">
+        <label for="bundle-input">Collage unique (qdisc + classes + filtres)</label>
+        <button
+          type="button"
+          class="inline-link"
+          @click="showExampleExplanation = !showExampleExplanation"
+        >
+          {{ showExampleExplanation ? 'masquer l\'explication' : 'expliquer l\'exemple' }}
+        </button>
+      </div>
       <textarea
         id="bundle-input"
         v-model="bundleRaw"
         rows="10"
-        placeholder='{"qdisc":[...],"classByDev":{"eth0":[...],"ifb0":[...]}}'
+        placeholder='{"qdisc":[...],"classByDev":{"eth0":[...]},"filterByDev":{"eth0":[...]}}'
       />
 
       <div class="actions">
@@ -26,13 +35,16 @@
       </div>
 
       <details class="advanced-inputs">
-        <summary>Mode avance: deux blocs JSON separes</summary>
+        <summary>Mode avancé: trois blocs JSON séparés</summary>
 
         <label for="qdisc-input">qdisc JSON</label>
         <textarea id="qdisc-input" v-model="qdiscRaw" rows="10" />
 
         <label for="class-input">class JSON</label>
         <textarea id="class-input" v-model="classRaw" rows="10" />
+
+        <label for="filter-input">filter JSON</label>
+        <textarea id="filter-input" v-model="filterRaw" rows="10" />
 
         <div class="actions">
           <button @click="loadSample">Exemple</button>
@@ -42,6 +54,8 @@
 
       <p v-if="error" class="error">{{ error }}</p>
     </div>
+
+    <TrafficProfileTable v-if="showExampleExplanation" :data="trafficProfile" class="profile-area" />
 
     <div class="panel details-panel">
       <div class="details-head">
@@ -77,18 +91,23 @@
 <script setup>
 import { computed, ref } from 'vue';
 import TcTree from './TcTree.vue';
+import TrafficProfileTable from './TrafficProfileTable.vue';
+import defaultSampleBundle from '../data/oneliner_result.json';
+import trafficProfile from '../data/default_traffic_profile.json';
 
 const captureOneLiner =
-  "q=\"$(tc -j qdisc show)\"; printf '{\"qdisc\":%s,\"classByDev\":{' \"$q\"; first=1; for dev in $(echo \"$q\" | jq -r '.[].dev' | sort -u); do [ $first -eq 0 ] && printf ','; first=0; printf '\"%s\":' \"$dev\"; tc -j class show dev \"$dev\"; done; printf '}}\\n'";
+  "q=\"$(tc -j qdisc show)\"; devs=\"$(echo \"$q\" | jq -r '.[].dev' | sort -u)\"; printf '{\"qdisc\":%s,\"classByDev\":{' \"$q\"; first=1; for dev in $devs; do [ $first -eq 0 ] && printf ','; first=0; printf '\"%s\":' \"$dev\"; tc -j class show dev \"$dev\"; done; printf '},\"filterByDev\":{' ; first=1; for dev in $devs; do [ $first -eq 0 ] && printf ','; first=0; printf '\"%s\":' \"$dev\"; tc -j filter show dev \"$dev\"; done; printf '}}\\n'";
 
 const qdiscRaw = ref('[]');
 const classRaw = ref('[]');
+const filterRaw = ref('[]');
 const bundleRaw = ref('');
 const treeData = ref(null);
 const selectedNode = ref(null);
 const error = ref('');
 const copyMessage = ref('');
 const showRawJson = ref(false);
+const showExampleExplanation = ref(false);
 
 const nodeEntries = computed(() => {
   if (!selectedNode.value || !selectedNode.value.raw || typeof selectedNode.value.raw !== 'object') {
@@ -145,11 +164,12 @@ function ensureDeviceRoot(map, device, globalRoot) {
   return node;
 }
 
-function buildTreeFromTc(qdiscItems, classItems) {
+function buildTreeFromTc(qdiscItems, classItems, filterItems) {
   const root = { id: 'tc-root', type: 'root', label: 'TC', raw: {}, children: [] };
   const deviceMap = new Map();
   const qdiscByHandle = new Map();
   const classById = new Map();
+  const filterNodes = [];
 
   qdiscItems.forEach((item, idx) => {
     const dev = item.dev || 'unknown';
@@ -182,6 +202,26 @@ function buildTreeFromTc(qdiscItems, classItems) {
     };
 
     classById.set(classid, node);
+    ensureDeviceRoot(deviceMap, dev, root);
+  });
+
+  filterItems.forEach((item, idx) => {
+    const dev = item.dev || 'unknown';
+    const parentHint = item.parent || item.classid || '';
+    const pref = item.pref || 'pref?';
+    const kind = item.kind || 'filter';
+    const protocol = item.protocol || '';
+    const node = {
+      id: `filter:${dev}:${parentHint || 'none'}:${pref}:${kind}:${idx}`,
+      type: 'filter',
+      label: protocol ? `${kind} (pref ${pref}, ${protocol})` : `${kind} (pref ${pref})`,
+      raw: item,
+      parentHint,
+      dev,
+      children: []
+    };
+
+    filterNodes.push(node);
     ensureDeviceRoot(deviceMap, dev, root);
   });
 
@@ -235,6 +275,31 @@ function buildTreeFromTc(qdiscItems, classItems) {
     devNode.children.push(node);
   });
 
+  filterNodes.forEach((node) => {
+    const parentKey = node.parentHint;
+    const devNode = ensureDeviceRoot(deviceMap, node.dev, root);
+
+    if (!parentKey || parentKey === 'root') {
+      devNode.children.push(node);
+      return;
+    }
+
+    const parentClass = classById.get(parentKey);
+    const parentQdisc = qdiscByHandle.get(parentKey);
+
+    if (parentClass) {
+      parentClass.children.push(node);
+      return;
+    }
+
+    if (parentQdisc) {
+      parentQdisc.children.push(node);
+      return;
+    }
+
+    devNode.children.push(node);
+  });
+
   return root;
 }
 
@@ -253,6 +318,7 @@ function parseBundle(value) {
 
   const qdiscs = Array.isArray(parsed.qdisc) ? parsed.qdisc : [];
   let classes = [];
+  let filters = [];
 
   if (Array.isArray(parsed.classes)) {
     classes = parsed.classes;
@@ -277,7 +343,30 @@ function parseBundle(value) {
     });
   }
 
-  return { qdiscs, classes };
+  if (Array.isArray(parsed.filters)) {
+    filters = parsed.filters;
+  }
+
+  if (parsed.filterByDev && typeof parsed.filterByDev === 'object' && !Array.isArray(parsed.filterByDev)) {
+    Object.entries(parsed.filterByDev).forEach(([dev, filterList]) => {
+      if (!Array.isArray(filterList)) {
+        return;
+      }
+
+      filterList.forEach((item) => {
+        if (!item || typeof item !== 'object') {
+          return;
+        }
+
+        filters.push({
+          ...item,
+          dev: item.dev || dev
+        });
+      });
+    });
+  }
+
+  return { qdiscs, classes, filters };
 }
 
 async function copyOneLiner() {
@@ -296,11 +385,12 @@ function buildTreeFromBundle() {
   copyMessage.value = '';
 
   try {
-    const { qdiscs, classes } = parseBundle(bundleRaw.value);
+    const { qdiscs, classes, filters } = parseBundle(bundleRaw.value);
 
     qdiscRaw.value = JSON.stringify(qdiscs, null, 2);
     classRaw.value = JSON.stringify(classes, null, 2);
-    treeData.value = buildTreeFromTc(qdiscs, classes);
+    filterRaw.value = JSON.stringify(filters, null, 2);
+    treeData.value = buildTreeFromTc(qdiscs, classes, filters);
     selectedNode.value = null;
     showRawJson.value = false;
   } catch (runtimeError) {
@@ -314,8 +404,9 @@ function buildTree() {
   try {
     const qdiscs = asArray(qdiscRaw.value, 'qdisc');
     const classes = asArray(classRaw.value, 'class');
+    const filters = asArray(filterRaw.value, 'filter');
 
-    treeData.value = buildTreeFromTc(qdiscs, classes);
+    treeData.value = buildTreeFromTc(qdiscs, classes, filters);
     selectedNode.value = null;
     showRawJson.value = false;
   } catch (runtimeError) {
@@ -329,24 +420,7 @@ function selectNode(node) {
 }
 
 function loadSample() {
-  bundleRaw.value = JSON.stringify(
-    {
-      qdisc: [
-        { dev: 'eth0', kind: 'htb', handle: '1:', parent: 'root' },
-        { dev: 'eth0', kind: 'fq_codel', handle: '10:', parent: '1:10' },
-        { dev: 'eth0', kind: 'fq_codel', handle: '20:', parent: '1:20' }
-      ],
-      classByDev: {
-        eth0: [
-          { dev: 'eth0', kind: 'htb', classid: '1:1', parent: '1:' },
-          { dev: 'eth0', kind: 'htb', classid: '1:10', parent: '1:1' },
-          { dev: 'eth0', kind: 'htb', classid: '1:20', parent: '1:1' }
-        ]
-      }
-    },
-    null,
-    2
-  );
+  bundleRaw.value = JSON.stringify(defaultSampleBundle, null, 2);
 
   buildTreeFromBundle();
 }
@@ -360,6 +434,7 @@ loadSample();
   grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
   grid-template-areas:
     'input input'
+    'profile profile'
     'tree details';
   gap: 1rem;
 }
@@ -375,6 +450,38 @@ loadSample();
 
 .details-panel {
   grid-area: details;
+}
+
+.profile-area {
+  grid-area: profile;
+}
+
+.bundle-head {
+  margin-top: 0.6rem;
+  margin-bottom: 0.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.bundle-head label {
+  margin: 0;
+}
+
+.inline-link {
+  border: none;
+  background: transparent;
+  color: #0a4a92;
+  text-decoration: underline;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.inline-link:hover {
+  color: #06356b;
 }
 
 .details-head {
@@ -514,12 +621,9 @@ pre {
     grid-template-columns: 1fr;
     grid-template-areas:
       'input'
+      'profile'
       'details'
       'tree';
-  }
-
-  .tree-area {
-    grid-area: tree;
   }
 
   .kv-row {
