@@ -1,0 +1,94 @@
+{
+  "headers": [
+    "Interface",
+    "Type de trafic",
+    "Bande passante",
+    "Priorite",
+    "Latence max",
+    "Protection/Securite",
+    "Queue classless en sortie",
+    "Objectif"
+  ],
+  "rows": [
+    {
+      "interface": "itf1",
+      "trafficType": "API clients",
+      "bandwidth": "400 Mbps (40%)",
+      "priority": "0",
+      "maxLatency": "100ms",
+      "protection": "Filtrage par sous-reseau (10.10.10.0/24)",
+      "egressQueue": "fq_codel (ecn, target 5ms, interval 100ms)",
+      "goal": "Eviter la congestion, equite entre requetes."
+    },
+    {
+      "interface": "itf1",
+      "trafficType": "Site web",
+      "bandwidth": "300 Mbps (30%)",
+      "priority": "1",
+      "maxLatency": "200ms",
+      "protection": "Filtrage par port (80, 443)",
+      "egressQueue": "fq_codel (ecn, target 5ms, interval 100ms)",
+      "goal": "Reduire la latence pour les utilisateurs."
+    },
+    {
+      "interface": "itf1",
+      "trafficType": "Sauvegardes cloud",
+      "bandwidth": "100 Mbps (10%)",
+      "priority": "3",
+      "maxLatency": "50ms",
+      "protection": "Filtrage par sous-reseau (10.20.30.0/24)",
+      "egressQueue": "tbf (100 Mbps, burst 64 kbit, latency 50ms)",
+      "goal": "Lisser le debit, eviter les pics."
+    },
+    {
+      "interface": "itf2",
+      "trafficType": "VoIP",
+      "bandwidth": "300 Mbps (30%)",
+      "priority": "0",
+      "maxLatency": "50ms",
+      "protection": "DSCP EF (dsfield 0xb8/0xfc)",
+      "egressQueue": "sfq (perturb 10)",
+      "goal": "Garantir une latence stable et un jitter minimal."
+    },
+    {
+      "interface": "itf2",
+      "trafficType": "Visioconference",
+      "bandwidth": "400 Mbps (40%)",
+      "priority": "1",
+      "maxLatency": "100ms",
+      "protection": "-",
+      "egressQueue": "-",
+      "goal": "Eviter les pertes de paquets et les variations de debit."
+    },
+    {
+      "interface": "itf2",
+      "trafficType": "NAS",
+      "bandwidth": "200 Mbps (20%)",
+      "priority": "2",
+      "maxLatency": "50ms",
+      "protection": "Filtrage par IP (10.30.40.10/32)",
+      "egressQueue": "tbf (200 Mbps, burst 128 kbit, latency 50ms)",
+      "goal": "Controler strictement le debit pour eviter la saturation."
+    },
+    {
+      "interface": "itf3",
+      "trafficType": "Interconnexion sites",
+      "bandwidth": "500 Mbps (50%)",
+      "priority": "0",
+      "maxLatency": "150ms",
+      "protection": "Filtrage par sous-reseau (10.40.0.0/16)",
+      "egressQueue": "-",
+      "goal": "Optimiser le debit et eviter les goulots d'etranglement."
+    },
+    {
+      "interface": "itf3",
+      "trafficType": "Acces distants / VPN",
+      "bandwidth": "400 Mbps (40%)",
+      "priority": "1",
+      "maxLatency": "200ms",
+      "protection": "Filtrage par port SSH (22), OpenVPN (1194), WireGuard (51820)",
+      "egressQueue": "cake (400 Mbps, diffserv4, nat)",
+      "goal": "Equite entre utilisateurs distants."
+    }
+  ]
+}

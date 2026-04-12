@@ -1,7 +1,7 @@
 <template>
   <div class="tree-wrap panel">
     <div class="tree-toolbar">
-      <strong>Arbre qdisc/class</strong>
+      <strong>Arbre qdisc/class/filter</strong>
       <span>Zoom: molette | Déplacement: glisser</span>
     </div>
     <svg ref="svgRef" class="tree-svg" role="img" aria-label="Arbre TC"></svg>
@@ -26,6 +26,7 @@ function colorFromType(type) {
   if (type === 'device') return '#005f73';
   if (type === 'qdisc') return '#d1495b';
   if (type === 'class') return '#2a9d8f';
+  if (type === 'filter') return '#6f42c1';
   return '#6c757d';
 }
 

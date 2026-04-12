@@ -5,15 +5,18 @@
 ```bash
 tc -j qdisc show
 tc -j class show
+tc -j filter show
 ```
 
-Les sorties JSON permettent de reconstruire la topologie des files (`qdisc`) et des classes (`class`) a partir des champs principaux:
+Les sorties JSON permettent de reconstruire la topologie des files (`qdisc`), des classes (`class`) et des filtres (`filter`) a partir des champs principaux:
 
 - `dev`
 - `kind`
 - `handle`
 - `classid`
 - `parent`
+- `pref`
+- `protocol`
 
 ## Exemple de hierarchy
 
