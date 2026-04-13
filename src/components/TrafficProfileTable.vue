@@ -26,6 +26,10 @@
         </tbody>
       </table>
     </div>
+
+    <p class="table-footer">
+      Voir aussi: <a href="https://github.com/thibaultleblanc/tc-visualizer/blob/master/test/example_tc_config.sh" target="_blank">exemple complet de configuration TC</a>
+    </p>
   </section>
 </template>
 
@@ -47,6 +51,21 @@ defineProps({
   margin-top: 0.35rem;
   margin-bottom: 0.8rem;
   color: #495161;
+}
+
+.table-footer {
+  margin-top: 0.6rem;
+  font-size: 0.74rem;
+  color: #495161;
+}
+
+.table-footer a {
+  color: #0a4a92;
+  text-decoration: none;
+}
+
+.table-footer a:hover {
+  text-decoration: underline;
 }
 
 .table-wrap {
