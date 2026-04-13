@@ -2,7 +2,8 @@
   <section class="parser-grid">
     <div class="panel input-panel">
       <h2>Entrées JSON TC</h2>
-      <p>Mode rapide: copie le one-liner, exécute-le sur la machine cible, puis colle le JSON dans la zone unique.</p>
+
+      <BilliardBanner />
 
       <label for="oneliner">One-liner de collecte</label>
       <textarea id="oneliner" :value="captureOneLiner" rows="4" readonly />
@@ -100,6 +101,7 @@
 
 <script setup>
 import { computed, ref } from 'vue';
+import BilliardBanner from './BilliardBanner.vue';
 import TcTree from './TcTree.vue';
 import TrafficProfileTable from './TrafficProfileTable.vue';
 import defaultSampleBundle from '../data/oneliner_result.json';
