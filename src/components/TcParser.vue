@@ -80,11 +80,21 @@
           </div>
         </div>
 
+        <div v-if="filterRuleEntries.length" class="rule-list">
+          <h3>Regles detectees</h3>
+          <div v-for="entry in filterRuleEntries" :key="entry.id" class="rule-json-block">
+            <p class="rule-json-title">{{ entry.label }}</p>
+            <pre class="rule-json-pre">{{ entry.json }}</pre>
+          </div>
+        </div>
+
         <pre v-if="showRawJson">{{ JSON.stringify(selectedNode.raw, null, 2) }}</pre>
       </template>
     </div>
 
-    <TcTree :tree-data="treeData" @node-click="selectNode" class="tree-area" />
+    <div class="tree-area">
+      <TcTree :tree-data="treeData" :show-filters="showFilters" @toggle-filters="showFilters = !showFilters" @node-click="selectNode" />
+    </div>
   </section>
 </template>
 
@@ -108,6 +118,7 @@ const error = ref('');
 const copyMessage = ref('');
 const showRawJson = ref(false);
 const showExampleExplanation = ref(false);
+const showFilters = ref(true);
 
 const nodeEntries = computed(() => {
   if (!selectedNode.value || !selectedNode.value.raw || typeof selectedNode.value.raw !== 'object') {
@@ -128,6 +139,24 @@ const nodeEntries = computed(() => {
 
     return { key, value: String(value) };
   });
+});
+
+const filterRuleEntries = computed(() => {
+  if (selectedNode.value?.type !== 'filter-rule') {
+    return [];
+  }
+
+  const rules = selectedNode.value.raw?.rules;
+
+  if (!Array.isArray(rules)) {
+    return [];
+  }
+
+  return rules.map((rule, idx) => ({
+    id: `rule-${idx}`,
+    label: `Regle ${idx + 1}`,
+    json: JSON.stringify(rule, null, 2)
+  }));
 });
 
 function asArray(value, label) {
@@ -164,12 +193,79 @@ function ensureDeviceRoot(map, device, globalRoot) {
   return node;
 }
 
+function getRootQdiscHandle(classid) {
+  if (typeof classid !== 'string' || !classid.includes(':')) {
+    return '';
+  }
+
+  return `${classid.split(':')[0]}:`;
+}
+
+function attachFilterNodes(filterItems, root, deviceMap, qdiscByHandle, classById) {
+  const filterLinkMap = new Map();
+
+  if (!Array.isArray(root.raw.filterLinks)) {
+    root.raw.filterLinks = [];
+  }
+
+  filterItems.forEach((item) => {
+    const dev = item.dev || 'unknown';
+    const parentKey = item.parent || item.classid || '';
+    const flowid = item.options?.flowid;
+    const pref = item.pref ?? '?';
+    const protocol = item.protocol || 'all';
+
+    if (!flowid) {
+      return;
+    }
+
+    const devNode = ensureDeviceRoot(deviceMap, dev, root);
+    const parentClass = parentKey ? classById.get(parentKey) : null;
+    const parentQdisc = parentKey ? qdiscByHandle.get(parentKey) : null;
+    const targetClass = classById.get(flowid);
+    const attachTarget = parentClass || parentQdisc || devNode;
+
+    if (targetClass) {
+      const filterLinkKey = `${attachTarget.id}:${targetClass.id}:${item.kind || 'filter'}:${pref}:${protocol}`;
+
+      if (!filterLinkMap.has(filterLinkKey)) {
+        const filterLink = {
+          id: `filter-link:${filterLinkKey}`,
+          sourceId: attachTarget.id,
+          targetId: targetClass.id,
+          label: `${item.kind || 'filter'} pref ${pref}`,
+          raw: {
+            dev,
+            parent: parentKey || 'root',
+            flowid,
+            pref,
+            protocol,
+            kind: item.kind || 'filter',
+            matchCount: 0,
+            rules: []
+          }
+        };
+
+        root.raw.filterLinks.push(filterLink);
+        filterLinkMap.set(filterLinkKey, filterLink);
+      }
+
+      const filterLink = filterLinkMap.get(filterLinkKey);
+      filterLink.raw.matchCount += 1;
+      filterLink.raw.rules.push(item);
+
+      if (filterLink.raw.matchCount > 1) {
+        filterLink.label = `${item.kind || 'filter'} pref ${pref} (${filterLink.raw.matchCount} regles)`;
+      }
+    }
+  });
+}
+
 function buildTreeFromTc(qdiscItems, classItems, filterItems) {
   const root = { id: 'tc-root', type: 'root', label: 'TC', raw: {}, children: [] };
   const deviceMap = new Map();
   const qdiscByHandle = new Map();
   const classById = new Map();
-  const filterNodes = [];
 
   qdiscItems.forEach((item, idx) => {
     const dev = item.dev || 'unknown';
@@ -190,11 +286,11 @@ function buildTreeFromTc(qdiscItems, classItems, filterItems) {
 
   classItems.forEach((item, idx) => {
     const dev = item.dev || 'unknown';
-    const classid = item.classid || `cauto-${idx}`;
+    const classid = item.classid || item.handle || `cauto-${idx}`;
     const node = {
       id: `class:${dev}:${classid}`,
       type: 'class',
-      label: `${item.kind || 'class'} (${classid})`,
+      label: `${item.class || item.kind || 'class'} (${classid})`,
       raw: item,
       parentHint: item.parent || '',
       dev,
@@ -202,26 +298,6 @@ function buildTreeFromTc(qdiscItems, classItems, filterItems) {
     };
 
     classById.set(classid, node);
-    ensureDeviceRoot(deviceMap, dev, root);
-  });
-
-  filterItems.forEach((item, idx) => {
-    const dev = item.dev || 'unknown';
-    const parentHint = item.parent || item.classid || '';
-    const pref = item.pref || 'pref?';
-    const kind = item.kind || 'filter';
-    const protocol = item.protocol || '';
-    const node = {
-      id: `filter:${dev}:${parentHint || 'none'}:${pref}:${kind}:${idx}`,
-      type: 'filter',
-      label: protocol ? `${kind} (pref ${pref}, ${protocol})` : `${kind} (pref ${pref})`,
-      raw: item,
-      parentHint,
-      dev,
-      children: []
-    };
-
-    filterNodes.push(node);
     ensureDeviceRoot(deviceMap, dev, root);
   });
 
@@ -255,6 +331,16 @@ function buildTreeFromTc(qdiscItems, classItems, filterItems) {
     const devNode = ensureDeviceRoot(deviceMap, node.dev, root);
 
     if (!parentKey) {
+      if (node.raw?.root) {
+        const rootQdiscHandle = getRootQdiscHandle(node.raw.classid || node.raw.handle || '');
+        const rootQdisc = qdiscByHandle.get(rootQdiscHandle);
+
+        if (rootQdisc && rootQdisc.dev === node.dev) {
+          rootQdisc.children.push(node);
+          return;
+        }
+      }
+
       devNode.children.push(node);
       return;
     }
@@ -275,30 +361,7 @@ function buildTreeFromTc(qdiscItems, classItems, filterItems) {
     devNode.children.push(node);
   });
 
-  filterNodes.forEach((node) => {
-    const parentKey = node.parentHint;
-    const devNode = ensureDeviceRoot(deviceMap, node.dev, root);
-
-    if (!parentKey || parentKey === 'root') {
-      devNode.children.push(node);
-      return;
-    }
-
-    const parentClass = classById.get(parentKey);
-    const parentQdisc = qdiscByHandle.get(parentKey);
-
-    if (parentClass) {
-      parentClass.children.push(node);
-      return;
-    }
-
-    if (parentQdisc) {
-      parentQdisc.children.push(node);
-      return;
-    }
-
-    devNode.children.push(node);
-  });
+  attachFilterNodes(filterItems, root, deviceMap, qdiscByHandle, classById);
 
   return root;
 }
@@ -541,6 +604,30 @@ loadSample();
 .kv-value {
   color: #111827;
   word-break: break-word;
+}
+
+.rule-list {
+  margin-top: 0.75rem;
+}
+
+.rule-list h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.86rem;
+}
+
+.rule-json-block {
+  margin-bottom: 0.55rem;
+}
+
+.rule-json-title {
+  margin: 0 0 0.3rem;
+  color: #4b5563;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.rule-json-pre {
+  margin: 0;
 }
 
 label {
